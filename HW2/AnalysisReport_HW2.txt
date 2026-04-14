@@ -1,0 +1,59 @@
+# 2026/04/13 
+# Analysis Report 2: Using UNIX commands to modify genomic files
+
+# Step 0: 
+#   Logging into the HPC
+       ssh km1255@10.119.6.131
+       gave password
+
+#   Making HW2 directory in km1255 directory & verified
+        cd /data/Reynolds/km1255
+        mkdir HW2
+        ls
+
+#   Copying hw2.bed file to my HW2 directory & verified
+        cd ../GenomicAnalysisCourse/HW2
+        cp hw2.bed ../../km1255/HW2
+
+# Step 1: Pulling large genomic intervals from a BED file
+#   We want all lines that have intervals (columns 2 & 3) over 500bp (column 5) and have a score greater than or equal to 100 to be saved into the hw2_intervals.bed file.
+        awk '$3 - $2 > 500 && $5 >= 100 {print $1 "\t" $2 "\t" $3 "\t" $5}' hw2.bed > hw2_intervals.bed
+# I added the first column to make it clear what chromosome we are looking at. 
+
+# Step 2: Identifying duplicated sample IDs in a PLINK .fam file
+#  Copying the PLINK .fam file to my directory & verifying
+        cd ../../GenomicAnalysisCourse/HW2
+        cp hw2.fam ../../km1255/HW2
+        cd ../../km1255/HW2 
+        ls
+#   A) Finding all Ind. IDs that appear more than once, printing them with their full rows to hw2_duplicated.fam
+        awk 'a[$2]++ {print $0}' hw2.fam > hw2_duplicates.fam
+#           Used this StackOverflow to determine the code cause the awk man page is super confusing: https://stackoverflow.com/questions/32084888/awk-how-do-i-find-duplicates-in-a-column        
+#   B) Removing the duplicated from hw2.fam & saving a count of of unique Family IDs to hw2_FID.counts
+        sort -u -k2,2 hw2.fam | cut -f1 | sort | uniq -c > hw2_FID.counts
+#           Used a cominabtion of two google pages to make the code above. Not gonna lie without google this wasnt gonna happen on a biologically timescale. Here's what i searched: "counting unique values in a column uniq" & "remove duplicates from column linux"
+
+# Step 3: Reformatting FASTA headers to a standardized naming scheme
+#  A) New file (hw2_fasta_names.txt) with the sample names.
+#       Using less, I took a lookie-loo into the FASTA file. It appears that all the sample IDs begin with an I.
+        grep I[0-9][0-9][0-9][0-9][0-9] hw2.fa > hw2_fasta_names.txt
+        
+#  B) Rewriting the headers, removing the underscore. Saved to hw2_modID.fa
+#       When looking at the sample IDs in the hw2_fasta_names.txt file there doesnt appear to be any that have underscores. Granted, the code i used would not pull those so I used the code below to look for any, but none came up. If they were there, they are not there now. 
+        grep _I[0-9][0-9][0-9][0-9][0-9] hw2.fa
+
+#       In an effort to still complete the homework, I will remove everything from the underscore and after, which re-reading the instrcutions I believe is the point.
+        sed 's/_[^_]*$//g' hw2.fa > hw2_modID.fa
+
+#       I tried multiple codes, but ultimately googled it. The --help pages are not all that helpful. Here's the biostars page I used: https://www.biostars.org/p/336428/         
+
+# Step 4: Finding samples in a PLINK .fam file
+#       We are looking for all the samples from Russia, so I used the code below and saved it to a file to make my life easier for checking my work. 
+        grep Russia_* v62.0_HO_public.fam > Russia_samples.txt
+
+#       Next, I used the above code to get the count of how namy samples there were, which appears to be 986.
+        wc -l Russia_samples.txt 
+
+#       For me last trick, I will take all the samples with the FID "Russia_Mesolithic_Veretye.AG" and put them in the v62_Russia_Mesolithic_Veretye.AG,fam file. 
+        grep Russia_Mesolithic_Veretye.AG v62.0_HO_public.fam > v62_Russia_Mesolithic_Veretye.AG.fam            
+
