@@ -57,3 +57,24 @@
 #       For me last trick, I will take all the samples with the FID "Russia_Mesolithic_Veretye.AG" and put them in the v62_Russia_Mesolithic_Veretye.AG,fam file. 
         grep Russia_Mesolithic_Veretye.AG v62.0_HO_public.fam > v62_Russia_Mesolithic_Veretye.AG.fam            
 
+# Okay, with the homework completed I need to get it uploaded to my GitHub repo. The instructions said to pull my GitHub repo to my HPC directory. 
+        git clone https://github.com/KEmcbroom/mcbroom-GenomicAnalysis-AnalysisReport1
+
+# Now, I need to commit my analysis report to my GitHub repo. First, I saved my report locally so I need to upload it to my HPC directory. I switched to a new local terminal (aka not logged into the HPC) to do this. 
+        scp /Users/KTWork/Desktop/Genomic_Analysis/AnalysisReport_HW2.txt km1255@10.119.6.131:/data/Reynolds/km1255/HW2
+
+# The above did not work because i initialized git on a local folder and not on the HPC, so I need to redo the steps to intialize git and make a GitHub repo to get my homework where it needs to go. Hold on tight. This is gonna take a second. 
+        sh-keygen -t ed25519 -C "km1255_HPC_directory" # Making Key
+        eval "$(ssh-agent -s)" # loading key into memory for git
+        ssh-add ~/.ssh/id_ed25519 
+        cat ~/.ssh/id_ed25519.pub # printing public key to paste to GitHub km1255_Repo
+        git init        # initalizing git
+        git branch -m main      # renaming default branch from master to main
+        git remote add origin git@github.com:KEmcbroom/km1255_Repo.git # setting the origin point so things go to the correct place
+        git add HW2/AnalysisReport_HW2.txt # staging only the analysis report to be added
+        git commit -m "Adding Analysis report" # making the comment
+        git push origin main # pushing the report to GitHub
+
+# its added. I'm done. 
+        
+
