@@ -1,0 +1,185 @@
+# 2026/04/16
+# Analysis Report 3: Processing FASTQ files
+
+# Step 0: Copying files from GenomicAnalysisCourse/HW3 to km1255/HW3
+    cp -r HW3/ ../km1255
+
+# The goal for this homework is the process 3 pairs of FASTQ files. I, like most, do not want to do any more work than necessary so I am going to write a script to process all three at the same time. 
+#   Step 1A: Writing the script.
+#      Activating conda: 
+            conda activate /data/Reynolds/GenomicAnalysisCourse/conda_envs/course_env/
+#      Editing previous fastqc script: 
+            nano run_fastqc.sh
+#      Final script read & saved as HW3_fastqc_R1.sh: 
+#           #!/bin/bash
+#           #SBATCH --job-name=KEHenson_HW3_fastqc
+#           #SBATCH --output=KEHenson_HW3_output.txt
+#           #SBATCH --error=KEHenson_HW3_error.txt
+#           #SBATCH --partition=cpu
+#           #SBATCH --nodes=1
+#           #SBATCH --ntasks-per-node=1
+#           #SBATCH --cpus-per-task=4
+#           #SBATCH --mem=8GB
+#           #SBATCH --time=01:00:00
+#           #SBATCH --mail-type=ALL
+#           #SBATCH --mail-user=katherinemcbroom@my.unthsc.edu
+
+#           conda activate /data/Reynolds/GenomicsAnalysisCourse/conda_envs/course_env
+
+#           cd /data/Reynolds/km1255/HW3
+
+#           fastqc -t 4 22018FL-04-01-12_S12_L002_R1_001.fastq.gz 22018FL-04-01-12_S12_L002_R2_001.fastq.gz
+
+#           fastqc -t 4 22018FL-04-01-21_S21_L007_R1_001.fastq.gz 22018FL-04-01-21_S21_L007_R2_001.fastq.gz
+
+#           fastqc -t 4 22154FL-03-01-01_S1_L003_R1_001.fastq.gz 22154FL-03-01-01_S1_L003_R2_001.fastq.gz
+
+#   Step 1B: Running the script on the HPC (job 341)
+        sbatch HW3_fastqc_R1.sh
+#           Can use scancel <jobid> to cancel a job that has been submitted
+#           Use squeue --me or squeue <username> to check job queue & status (R = running, PD = pending, CG = finished, CD = finsihed, F = Failed )
+#           Use scontrol show job <jobid> to check on detailed status of job
+#           Use sacct -u <username> to check on recent job history
+#   Step 1C: Downloading the reports to my local machine for analysis
+        Opened terminal on my local machine
+        cd Desktop/Genomic_Analysis/
+        scp km1255@10.119.6.131:/data/Reynolds/km1255/HW3/*.zip .
+#       Unzipped files on my local machine. 
+#   Step 1D: Analyzing FASTQC reports
+#       Issues with File: 22018FL-04-01-12_S12_L002_R1_001.fastq.gz
+#               Per tile sequence quality: Failed. a few sporadic positions and two lanes appear to have low quality. Does not appear like a full run failure so we will leave this alone for now. 
+#               Per base sequence conetent: Warning. weird spiking in positions 1 - 9 indicative of adapter conetent
+#               Per sequence GC content: Warning. Indicative of contamination.
+#               Adapter Content: Failed. need to trim adapters. 
+#       Issues with File: 22018FL-04-01-12_S12_L002_R2_001.fastq.gz
+#               Per tile sequence quality: Failed. a few sporadic positions and two lanes appear to have low quality. Does not appear like a full run failure so we will leave this alone for now. 
+#               Per base sequence conetent: Warning. weird spiking in positions 1 - 9 indicative of adapter conetent
+#               Per sequence GC content: Warning. Indicative of contamination.
+#               Adapter Content: Failed. need to trim adapters. 
+#       Issues with File: 22018FL-04-01-21_S21_L007_R1_001.fastq.gz
+#               Per tile sequence quality: Warning. a few sporadic positions and two lanes appear to have low quality. Does not appear like a full run failure so we will leave this alone for now. 
+#               Per base sequence conetent: Warning. weird spiking in positions 1 - 9 indicative of adapter conetent
+#               Per sequence GC content: Warning. Indicative of contamination.
+#               Adapter Content: Failed. need to trim adapters. 
+#       Issues with File: 22018FL-04-01-21_S21_L007_R2_001.fastq.gz
+#               Per tile sequence quality: Failed. a few sporadic positions and two lanes appear to have low quality. Does not appear like a full run failure so we will leave this alone for now. 
+#               Per base sequence conetent: Warning. weird spiking in positions 1 - 9 indicative of adapter conetent
+#               Per sequence GC content: Warning. Indicative of contamination.
+#               Adapter Content: Failed. need to trim adapters. 
+#       Issues with File: 22154FL-03-01-01_S1_L003_R1_001.fastq.gz
+#               Per base sequence quality: Failed. 
+#               Per tile sequence quality: Failed. a few sporadic positions have low quality. Does not appear like a full run failure so we will leave this alone for now. 
+#               Per base sequence conetent: Failed. lots of weird spiking in positions 1 - 6 indicative of adapter conetent
+#               Per sequence GC content: Warning. Indicative of contamination.
+#               Sequence Duplication levels: Failed. 
+#               Overrepresented Sequences: Warning. 
+#               Adapter Content: Failed. need to trim adapters. 
+#       Issues with File: 22154FL-03-01-01_S1_L003_R2_001.fastq.gz
+#               Per base sequence quality: Failed. 
+#               Per base sequence conetent: Failed. lots of weird spiking in positions 1 - 6 indicative of adapter conetent
+#               Per sequence GC content: Failed. Indicative of contamination.
+#               Sequence Duplication levels: Failed. 
+#               Overrepresented Sequences: Warning. 
+#               Adapter Content: Failed. need to trim adapters. 
+#
+# Step 2: QC FASTQ files wirh fastp
+# Step 2A: Editing fastp_fastqc.sh slurm script. See below for details of slurm script for the first round of QC using fastp. Saved as hw3_fastp.sh.
+#       #!/bin/bash
+#       #SBATCH --job-name=KEHenson_HW3_fastp
+#       #SBATCH --output=KEHenson_HW3_fastp_output.txt
+#       #SBATCH --error=KEHenson_HW3_fastp_error.txt
+#       #SBATCH --partition=cpu
+#       #SBATCH --nodes=1
+#       #SBATCH --ntasks-per-node=1
+#       #SBATCH --cpus-per-task=4
+#       #SBATCH --mem=8GB
+#       #SBATCH --time=01:10:00
+#       #SBATCH --mail-type=ALL
+#       #SBATCH --mail-user=katherinemcbroom@my.unthsc.edu
+
+#       conda activate /data/Reynolds/GenomicsAnalysisCourse/conda_envs/course_env
+
+#       cd /data/Reynolds/km1255/HW3
+
+#       fastp -i 22018FL-04-01-12_S12_L002_R1_001.fastq.gz -I 22018FL-04-01-12_S12_L002_R2_001.fastq.gz -o L002_R1_trimmed_r1.fastq.gz -O L002_R2_trimmed_r1.fastq.gz --thread 4
+
+#       fastp -i 22018FL-04-01-21_S21_L007_R1_001.fastq.gz -I 22018FL-04-01-21_S21_L007_R2_001.fastq.gz -o L007_R1_trimmed_r1.fastq.gz -O L007_R2_trimmed_r1.fastq.gz --thread 4
+
+#       fastp -i 22154FL-03-01-01_S1_L003_R1_001.fastq.gz -I 22154FL-03-01-01_S1_L003_R2_001.fastq.gz -o L003_R1_trimmed_r1.fastq.gz -O L003_R2_trimmed_r1.fastq.gz --thread 4
+
+# Step 2B: Running hw3_fastp.sh on HPC
+        sbatch hw3_fastp.sh
+
+# Step 2C: Re-running FASTQC on the trimmed files to see if the issues persist. 
+#       Rewrote the slurm script from Step 1A, changing the file names for the names of the trimmed files and saving to r2_fastqc.sh
+#       Names of trimmed files: 
+#               L002_R1_trimmed_r1.fastq.gz L002_R2_trimmed_r1.fastq.gz 
+#               L003_R1_trimmed_r1.fastq.gz L003_R2_trimmed_r1.fastq.gz
+#               L007_R1_trimmed_r1.fastq.gz L007_R2_trimmed_r1.fastq.gz
+
+# Step 2D: Submitting job to HPC.
+        sbatch r2_fastqc.sh
+
+# Step 2E: Downloading the FASTQC files to my local machine again. 
+#       Opened terminal on my local machine
+        cd Desktop/Genomic_Analysis/
+        scp km1255@10.119.6.131:/data/Reynolds/km1255/HW3/*.zip .
+#       Unzipped files on my local machine.
+
+# Step 2F: Analysing FASTQC Files to see if issues persist. 
+#       File Name: L002_R1_trimmed_r1.fastq.gz
+#               Adapter content: Fixed! 
+#               Per tile sequence quality: Failed. Not much to do about this one. We will have to see if it becomes an issue during mapping. 
+#               Per base sequence content: Warning. Suprised this issue persisted after removing the adapter content. 
+#               Per sequence GC content: Warning. Distribution moved closer to normal. 
+#               Sequence length distribution: Warning. Not all sequences are the same length but the majority are at 150-152bp, which I believe is to be expected with Illumina.
+#       File Name: L002_R2_trimmed_r1.fastq.gz
+#               Adapter content: Fixed! 
+#               Per tile sequence quality: Failed. Not much to do about this one. We will have to see if it becomes an issue during mapping. 
+#               Per base sequence content: Warning. Again this issue persisted after removing the adapter content. Since it is at the beginning of the reads and no other flags indicate contamination, I am going to move on.
+#               Per sequence GC content: Warning. Distribution moved closer to normal. 
+#               Sequence length distribution: Warning. Not all sequences are the same length but the majority are at 145-149bp. A little shorter than expected. 
+#       File Name: L007_R1_trimmed_r1.fastq.gz
+#               Adapter content: Fixed! 
+#               Per tile sequence quality: Warning. Nothing to do here. just vibes. 
+#               Per base sequence content: Warning. See above reasoning for doing nothing.
+#               Per sequence GC content: Warning. Distribution moved slightly farther right, indicating a higher mean GC content.
+#               Sequence length distribution: Warning. Majority are at 145-149bp. A little shorter than expected. 
+#       File Name: L007_R2_trimmed_r1.fastq.gz
+#               Adapter content: Fixed! 
+#               Per tile sequence quality: Failed. Nothing to do here. just vibes. 
+#               Per base sequence content: Warning. See above reasoning for doing nothing.
+#               Per sequence GC content: Warning. Distribution moved slightly farther right, indicating a higher mean GC content.
+#               Sequence length distribution: Warning. Majority are at 145-149bp. A little shorter than expected, but little trimming was a little overzealous. 
+#       File Name: L003_R1_trimmed_r1.fastq.gz
+#               Adapter content: Fixed!
+#               Per base sequence quality: Failed. Did not really change.
+#               Per tile sequence quality: Failed. Its not awesome, but it is mostly sporadic. Unless we are going to redo the wet lab work, theres nothing to do here. 
+#               Per base sequence conetent: Failed. Lines are absolutely not parallel at the start with a TGACTG sequence appearing in the first 6 bases. Lines are better moving towards the end but are not parallel. 
+#               Per sequence GC content: Failed. Bimodal distribution shifted right compared to theoretical distribution.
+#               Sequence length distribution: Failed. lots of 64-70bp reads.
+#               Sequence Duplication levels: Failed. Almost 80% of sequences are duplicates. The report says that if decuplicated, only 3.85% of reads would reamain. This is likely due to enrichment bias of some kind. 
+#               Overrepresented Sequences: Warning. There are two overrepresented sequences: TGACTGGACACA... and TGACTGGTGTGTGTGTGTG.. Going to BLAST these. 
+#                       BLAST Queries: I only BLASTED one sequence as the ends are complimentary. 
+#                               TGACTGGACACA... sequence came back mathcing to ray-finned fishes. Its a short sequence, so I am hesitant to believe this as it likely matches to A LOT of other species/sequences. 
+#       File Name: L003_R2_trimmed_r1.fastq.gz
+#               Adapter content: Fixed!
+#               Per base sequence quality: Failed. Did not really change.
+#               Per base sequence conetent: Failed. Lines are absolutely not parallel at the start with a TGACTG sequence appearing in the first 6 bases. Lines are better moving towards the end but are not parallel. 
+#               Per sequence GC content: Failed. Bimodal distribution shifted right compared to theoretical distribution.
+#               Sequence length distribution: Warning. lots of 64-70bp reads.
+#               Sequence Duplication levels: Failed. Almost 80% of sequences are duplicates. The report says that if decuplicated, only 6% of reads would reamain. This is likely due to enrichment bias of some kind. 
+#               Overrepresented Sequences: Warning. There are three overrepresented sequences: TGACTGGACACA..., TGACTGGTGTG.., and TGACTGGCACACA... Going to BLAST these. 
+#                       BLAST Queries: I only BLASTED the new third sequence (TGACTGGCACACA...), but it returned nothing. 
+
+# Step 3: Re-re-analysis of FASTQ Files
+#       I am satisfied with the results of FASTQC report for the trimmed versions of L002 and L007. Many of the persisting issues cannot be fixed without re-doing the wetlab work. 
+#       While, I am not totally satified with the results of the trimmed L003 files, i am hesitant to remove the duplicated sequences because none of the BLAST queries pulled anything, but ray-finned fish which I dont believe to be correct. 
+#       All that said, I am done with the HW and going to move on to pushing my report to GitHub. 
+
+# Step 4: Adding to GitHub
+#       git add HW3/AnalysisReport3_FASTQ # staging only the analysis report to be added
+        git commit -m "Adding Analysis report" # making the comment
+        git push origin main # pushing the report to GitHub
+
+# Thanks! :)
