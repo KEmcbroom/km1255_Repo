@@ -1,0 +1,115 @@
+# 2026-04-27: Mapping QC'd FASTQ Files to the Reference Genome
+
+# Steps 1-3: Mapping the FASTQ's to the human reference genome
+#   Step 1:  
+#       Alright, alright, alright. We have reached the stage where we need to map the qc'd FASTQ files from last week to the human reference genome. Woohoo!
+#       To do this right, we need to make our slurm script first. See below for what the script contained. Note that I piped the output of bwa mem directly into samtools sort so I can skip all the hullabaloo with the sam files. I got the code form this page: https://biology.stackexchange.com/questions/59493/how-to-convert-bwa-mem-output-to-bam-format-without-saving-sam-file
+#       Well, after trying four different times and receiving multiple errors for timing out, lack of memory, etc. I discussed the issue with Dr. Reynolds (hi Dr. Reynolds). 
+#       Taking his suggestion, I altered my slurm script to use the GPU rather than CPU nodes and increase the number of cores (aka threads) I allocate to the job. Lastly, I split the script into three: one for each set of FASTQs. 
+#       For simplicity, here is what the script would look like as one script. Now, imagine that three times with only one sample per script. 
+#           #!/bin/bash
+#           #SBATCH --job-name=KEHenson_mapping
+#           #SBATCH --output=KEHenson_mapping_output.txt
+#           #SBATCH --error=KEHenson_mapping_error.txt
+#           #SBATCH --partition=gpu
+#           #SBATCH --nodes=1
+#           #SBATCH --ntasks-per-node=1
+#           #SBATCH --cpus-per-task=8
+#           #SBATCH --mem=16GB
+#           #SBATCH --time=30:10:00
+#           #SBATCH --mail-type=ALL
+#           #SBATCH --mail-user=katherinemcbroom@my.unthsc.edu
+
+#           conda activate /data/Reynolds/GenomicsAnalysisCourse/conda_envs/course_env
+
+#           cd /data/Reynolds/km1255/HW4
+
+#           bwa mem -t 8 ../reference/hg38.fa.gz ../HW3/22018FL-04-01-12_S12_L002_R1_001.fastq.gz ../HW3/22018FL-04-01-12_S12_L002_R2_001.fastq.gz | samtools sort -@8 -o 22018FL-04-01-12_S12_L002_sorted.bam - 
+
+#           bwa mem -t 8 ../reference/hg38.fa.gz ../HW3/22018FL-04-01-21_S21_L007_R1_001.fastq.gz ../HW3/22018FL-04-01-21_S21_L007_R2_001.fastq.gz | samtools sort -@8 -o 22018FL-04-01-21_S21_L007_sorted.bam - 
+
+#           bwa mem -t 8 ../reference/hg38.fa.gz ../HW3/22154FL-03-01-01_S1_L003_R1_001.fastq.gz ../HW3/22154FL-03-01-01_S1_L003_R2_001.fastq.gz | samtools sort -@8 -o 22154FL-03-01-01_S1_L003_sorted.bam -
+
+#       This finally worked! Now, I am moving onto the next steps.
+
+#   Step 3: Sorting & Indexing bam files.
+#       Because I piped the bwa mem output directly to samtools, the bams files are already sorted. I do still need to index them though.
+#       I made another slurm script for this.
+#           #!/bin/bash
+#           #SBATCH --job-name=KEHenson_indexing
+#           #SBATCH --output=KEHenson_indexing_output.txt
+#           #SBATCH --error=KEHenson_indexing_error.txt
+#           #SBATCH --partition=cpu
+#           #SBATCH --nodes=1
+#           #SBATCH --ntasks-per-node=1
+#           #SBATCH --cpus-per-task=4
+#           #SBATCH --mem=8GB
+#           #SBATCH --time=01:10:00
+#           #SBATCH --mail-type=ALL
+#           #SBATCH --mail-user=katherinemcbroom@my.unthsc.edu
+
+#           conda activate /data/Reynolds/GenomicsAnalysisCourse/conda_envs/course_env
+
+#           cd /data/Reynolds/km1255/HW4
+
+#           samtools index -@4 22018FL-04-01-12_S12_L002_sorted.bam
+
+#           samtools index -@4 22018FL-04-01-21_S21_L007_sorted.bam
+
+#           samtools index -@4 22154FL-03-01-01_S1_L003_sorted.bam
+
+#   Step 2: Qualimap reports
+#       Let's make these reports. I did put these into a slurm script, just not going to put the whole thing here. 
+            qualimap bamqc -nt 4 -bam 22018FL-04-01-12_S12_L002_sorted.bam --java-mem-size=16G -outdir L002_sorted_qualimap_results
+            qualimap bamqc -nt 4 -bam 22018FL-04-01-21_S21_L007_sorted.bam --java-mem-size=16G -outdir L007_sorted_qualimap_results
+            qualimap bamqc -nt 4 -bam 22154FL-03-01-01_S1_L003_sorted.bam -outdir L003_sorted_qualimap_results
+#       Saving the directories to my local machine
+            scp -r km1255@10.119.6.131:/data/Reynolds/km1255/HW4/L002_sorted_qualimap_results/ .
+            scp -r km1255@10.119.6.131:/data/Reynolds/km1255/HW4/L007_sorted_qualimap_results/ .
+            scp -r km1255@10.119.6.131:/data/Reynolds/km1255/HW4/L003_sorted_qualimap_results/ .
+
+#       The first time I ran the slurm script, L002 and L007 failed due to a lack of memory, so I added how much memory qualimap can use to do the job. This edit is reflected above.
+#       Now, there was not enough memory alotted to the HPC..so I upped that to 16GB. 
+
+#       Well, its Monday, May 4th. Things have finally worked. Let's check out these reports. 
+#           L002: Looks like we hit most of the geneome at at least 1X coverage with a mean of 10X coverage. There was a few duplicates though, so those need to be marked.
+#           L007: Again, most of the genome was covered at least once but mean coverage was lonly 7X. Still some duplicates to be marked. 
+#           L003: Honestly, something is worng with this but I am not sure what. Mean coverage was super low (0.7X), nuceleotide content is wonky, lots of duplicates, coverage across genome is all over the place, etc. 
+
+# Step 4-5: Read Groups & Marking Duplicates, re-running Qualimap
+#   Let's try to run picard without adding read groups and hope that it works. It did not work so we need to add read groups. uggghh... Added these to a script.. sooo many scripts... :'(
+       picard AddOrReplaceReadGroups I=22018FL-04-01-12_S12_L002_sorted.bam O=22018FL-04-01-12_S12_L002_sorted_RG.bam RGID=sample RGLB=lib1 RGPL=ILLUMINA RGPU=unit1 RGSM=sample
+       picard AddOrReplaceReadGroups I=22018FL-04-01-21_S21_L007_sorted.bam O=22018FL-04-01-21_S21_L007_sorted_RG.bam RGID=sample RGLB=lib1 RGPL=ILLUMINA RGPU=unit1 RGSM=sample
+#      picard AddOrReplaceReadGroups I=22154FL-03-01-01_S1_L003_sorted.bam O=22154FL-03-01-01_S1_L003_sorted_RG.bam RGID=sample RGLB=lib1 RGPL=ILLUMINA RGPU=unit1 RGSM=sample
+
+#   With the readgroups added, I added the code below to three separate slurm scripts to run. 
+        picard MarkDuplicates -I 22018FL-04-01-12_S12_L002_sorted_RG.bam -O 22018FL-04-01-12_S12_L002_sorted_RG_markups.bam -M 22018FL-04-01-12_S12_L002_sorted_RG_markups_metrics.txt
+        picard MarkDuplicates -I 22018FL-04-01-21_S21_L007_sorted_RG.bam -O 22018FL-04-01-21_S21_L007_sorted_RG_markups.bam -M 22018FL-04-01-21_S21_L007_sorted_RG_markups_metrics.txt
+        picard MarkDuplicates -I 22154FL-03-01-01_S1_L003_sorted_RG.bam -O 22154FL-03-01-01_S1_L003_sorted_RG_markups.bam -M 22154FL-03-01-01_S1_L003_sorted_RG_markups_metrics.txt
+#   Now, i have to re-run qualimap. 
+        qualimap bamqc -nt 8 -bam 22018FL-04-01-12_S12_L002_sorted_RG_markups.bam --java-mem-size=16G -outdir L002_sorted_qualimap_results_R2
+        qualimap bamqc -nt 8 -bam 22018FL-04-01-21_S21_L007_sorted_RG_markups.bam --java-mem-size=16G -outdir L007_sorted_qualimap_results_R2
+        qualimap bamqc -nt 8 -bam 22154FL-03-01-01_S1_L003_sorted_RG_markups.bam --java-mem-size=16G -outdir L003_sorted_qualimap_results_R2
+#   Saving the new directories to my local machine
+            scp -r km1255@10.119.6.131:/data/Reynolds/km1255/HW4/L002_sorted_qualimap_results_R2/ .
+            scp -r km1255@10.119.6.131:/data/Reynolds/km1255/HW4/L007_sorted_qualimap_results_R2/ .
+            scp -r km1255@10.119.6.131:/data/Reynolds/km1255/HW4/L003_sorted_qualimap_results_R2nan/ .
+#   Looking at the new reports.. 
+#        L002: duplicated reads dropped from 36.17% to 17.43%, which are marked as flagged rather than estimated. Most everything else stayed the same.
+#        L003: duplicated reads was estimated at 72% and was flagged at 71%. 
+#        L007: duplicated reads was estimates at 39.66% and was flagged at 16.73%.             
+
+# Step 6: Measuring coverage with MosDepth
+#   Indexing new bam files... 
+        samtools index -@8 22018FL-04-01-12_S12_L002_sorted_RG_markups.bam
+        samtools index -@8 22018FL-04-01-21_S21_L007_sorted_RG_markups.bam 
+        samtools index -@8 22154FL-03-01-01_S1_L003_sorted_RG_markups.bam 
+#   Last thing that needs to be done is measure the depth. I have once again created a script for each sample with the following code. 
+        mosdepth -t 8 22018FL-04-01-12_S12_L002_sorted_RG_markups_depth 22018FL-04-01-12_S12_L002_sorted_RG_markups.bam
+        mosdepth -t 8 22018FL-04-01-21_S21_L007_sorted_RG_markups_depth 22018FL-04-01-21_S21_L007_sorted_RG_markups.bam
+        mosdepth -t 8 22154FL-03-01-01_S1_L003_sorted_RG_markups_depth 22154FL-03-01-01_S1_L003_sorted_RG_markups.bam
+#   Average coverage for L002 is 5.31X. 
+#   Average coverage for L003 is 0.01X
+#   Average coverage for L007 is 3.88X. 
+# Variant calls will probably be crap, especially for L003. :)
+        
